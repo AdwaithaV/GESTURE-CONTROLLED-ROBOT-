@@ -1,0 +1,152 @@
+#include "constants.h"
+char command = 'S';                 // Current command
+unsigned long lastCommandTime = 0;  // To detect if command stopped
+int currentSpeed = 0;               // 0–255 PWM speed
+bool manualMode = true;             // Start in Manual mode
+
+void setup() {
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  digitalWrite(TRIG_PIN, LOW);
+
+  Serial.begin(9600);
+  stopRobot();
+  Serial.println("Gesture Robot Initialized - MANUAL MODE ON");
+}
+
+void loop() {
+  // Read Bluetooth data
+  if (Serial.available() > 0) {
+    command = Serial.read();
+    lastCommandTime = millis();
+
+    if (command == 'A') {
+      manualMode = false;
+      Serial.println("Switched to AUTO MODE");
+    }
+    else if (command == 'M') {
+      manualMode = true;
+      Serial.println("Switched to MANUAL MODE");
+    }
+  }
+
+  if (manualMode) {
+    manualControl();
+  } else {
+    autoMode();
+  }
+  if (millis() - lastCommandTime > 800 && manualMode) {
+    if (currentSpeed > 0) {
+      currentSpeed -= 8;  // braking effect
+      applySpeed();
+    } else {
+      stopRobot();
+    }
+  }
+}
+
+void manualControl() {
+  switch (command) {
+    case 'F': accelerateForward(); break;
+    case 'B': accelerateBackward(); break;
+    case 'L': turnLeft(); break;
+    case 'R': turnRight(); break;
+    case 'S': stopRobot(); break;
+  }
+}
+
+void autoMode() {
+  long distance = getDistance();
+  Serial.print("Distance: ");
+  Serial.println(distance);
+
+  if (distance > SAFE_DISTANCE) {
+    moveForward(FIXED_AUTO_SPEED);
+  } 
+  else {
+    stopRobot();
+    delay(200);
+
+    // Check right
+    turnRight();
+    delay(300);
+    if (getDistance() > SAFE_DISTANCE) return;
+
+    // Check left
+    turnLeft();
+    turnLeft();
+    delay(500);
+    if (getDistance() > SAFE_DISTANCE) return;
+
+    // Surrounded
+    accelerateBackward();
+    delay(500);
+  }
+}
+
+void accelerateForward() {
+  currentSpeed = min(currentSpeed + ACCEL_STEP, MAX_SPEED);
+  moveForward(currentSpeed);
+}
+
+void accelerateBackward() {
+  currentSpeed = min(currentSpeed + ACCEL_STEP, MAX_SPEED);
+  moveBackward(currentSpeed);
+}
+
+void moveForward(int spd) {
+  analogWrite(ENA, spd);
+  analogWrite(ENB, spd);
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+}
+
+void moveBackward(int spd) {
+  analogWrite(ENA, spd);
+  analogWrite(ENB, spd);
+  digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+}
+
+void turnLeft() {
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
+  digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+}
+
+void turnRight() {
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+}
+
+void stopRobot() {
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
+
+void applySpeed() {
+  analogWrite(ENA, currentSpeed);
+  analogWrite(ENB, currentSpeed);
+}
+
+long getDistance() {
+  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  long distance = duration * 0.034 / 2; // in cm
+  return distance;
+}
