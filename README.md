@@ -1,119 +1,138 @@
-📌 Gesture-Controlled Robot (Manual + Obstacle Avoidance Mode)
+# 🚀 Gesture Controlled Robot (Manual + Obstacle Avoidance Mode)
 
-This project is a 4-wheel Arduino robot that can be controlled using hand gestures and also switch to Autonomous Obstacle Avoidance mode.
-The gestures are captured using a Basic CNN model, which sends commands to the robot via Bluetooth. An ultrasonic sensor enables autonomous navigation with intelligent obstacle detection.
+This project is a 4-wheel Arduino robot that can be controlled using hand gestures and can also switch to Autonomous Obstacle Avoidance mode. The gestures are detected using a Basic CNN model and sent to the robot via Bluetooth. An ultrasonic sensor enables the robot to avoid obstacles intelligently.
 
-🚀 Features
+---
 
-✅ Gesture-Based Manual Control
-Use hand gestures detected by a CNN model to move the robot:
+## ✅ Features
 
-Gesture/Key	Action
-F / Forward Gesture	Move Forward
-B / Backward Gesture	Move Backward
-L / Left Gesture	Turn Left
-R / Right Gesture	Turn Right
-S	Stop
-M	Switch to Manual Mode
-A	Switch to Autonomous Mode
+### 🎮 Manual Gesture Control
+Hand gestures are detected using a CNN model and converted into commands:
 
-✅ Autonomous Obstacle Avoidance Mode
+| Gesture/Key | Action |
+|-------------|--------|
+| F / Forward Gesture | Move Forward |
+| B / Backward Gesture | Move Backward |
+| L / Left Gesture | Turn Left |
+| R / Right Gesture | Turn Right |
+| S | Stop |
+| M | Switch to Manual Mode |
+| A | Switch to Autonomous Mode |
 
-Uses an ultrasonic sensor to detect obstacles
+### 🤖 Autonomous Obstacle Avoidance
+- Detects objects using an ultrasonic sensor
+- If obstacle in front → turn right
+- If right is also blocked → turn left
+- If surrounded → move backward
+- Automatically resumes forward movement when path is clear
 
-If obstacle in front → turn right
+### 📡 Bluetooth Control
+Supports HC-05/HC-06 Bluetooth module  
+Compatible with mobile apps or Python script
 
-If right also blocked → turn left
+### ⚙️ Speed Control (Manual Mode Only)
+Uses PWM for smooth speed changes  
+Speed increases the longer the command is sent  
+Stops when command input stops
 
-If surrounded → move backward
+---
 
-Automatically resumes forward motion when path is clear
+## 🧠 Tech Stack
 
-✅ Bluetooth Communication
+| Technology | Purpose |
+|------------|----------|
+| Arduino Uno / Nano | Main controller |
+| HC-05/HC-06 | Communication |
+| L298N Motor Driver | Motor control |
+| Ultrasonic Sensor | Obstacle detection |
+| Python + OpenCV + CNN | Gesture detection |
 
-Commands transmitted via HC-05/HC-06 Bluetooth module
+---
 
-Compatible with mobile apps or Python scripts
+## 🔧 Hardware Requirements
 
-✅ Motor Speed Control (Manual)
+| Component | Qty |
+|-----------|-----|
+| Arduino Uno / Nano | 1 |
+| L298N Motor Driver | 1 |
+| HC-05/HC-06 Bluetooth Module | 1 |
+| HC-SR04 Ultrasonic Sensor | 1 |
+| 4 DC Motors + Wheels | 4 |
+| Battery Pack (7.4V–12V) | 1 |
+| Chassis | 1 |
+| Jumper Wires | — |
 
-Speed adjusts using PWM based on how long command is sent
+---
 
-Smooth acceleration and deceleration for realistic control
+## ⚙️ Wiring Overview
 
-🧠 Tech Stack
-Component	Usage
-Arduino Uno / Nano	Main controller
-HC-05 / HC-06	Wireless communication
-L298N Motor Driver	Controls DC motors
-Ultrasonic Sensor (HC-SR04)	Obstacle detection
-Python + OpenCV + CNN	Hand-gesture recognition
-🔧 Hardware Required
-Component	Quantity
-Arduino Uno / Nano	1
-L298N Motor Driver	1
-HC-05/HC-06 Bluetooth Module	1
-HC-SR04 Ultrasonic Sensor	1
-4 DC Motors + Wheels	4
-Battery Pack (7.4V–12V)	1
-Chassis	1
-Jumper Wires	—
-⚙️ Wiring Diagram (Overview)
-Arduino Pin	Connected To
-D5 (PWM)	Left Motor Enable
-D6 (PWM)	Right Motor Enable
-D8, D9	Left Motor IN1, IN2
-D10, D11	Right Motor IN3, IN4
-D2, D3	Ultrasonic Trigger, Echo
-RX, TX	Bluetooth TX, RX (cross connection)
+| Arduino Pin | Connected To |
+|-------------|-----------------|
+| D5 (PWM) | Left Motor Enable |
+| D6 (PWM) | Right Motor Enable |
+| D8, D9 | Left Motor IN1, IN2 |
+| D10, D11 | Right Motor IN3, IN4 |
+| D2, D3 | Ultrasonic Trigger, Echo |
+| RX, TX | Bluetooth TX, RX (crossed) |
 
-Detailed wiring diagram will be added as an image in /docs/.
+> A detailed wiring diagram is provided in `/docs/`.
 
-📂 Project Structure
+---
+
+
+
+## 📂 Project Structure
+
 GESTURE-CONTROLLED-ROBOT/
 │
 ├── code/
-│   ├── gesture_robot.ino         # Arduino code
-│   └── cnn_gesture_control.py     # Python gesture detection + command sender
+│ ├── gesture_robot.ino # Arduino Code
+│ └── cnn_gesture_control.py # Python Gesture Detection + Sender
 │
 ├── models/
-│   └── gesture_cnn_model.h5       # Saved CNN model
+│ └── gesture_cnn_model.h5 # CNN Model
 │
 ├── docs/
-│   ├── wiring_diagram.png
-│   ├── how_it_works.md
-│   └── demo_images/
+│ ├── wiring_diagram.png
+│ ├── how_it_works.md
+│ └── demo_images/
 │
-├── README.md                      # Project Documentation
+├── README.md
 └── LICENSE
 
-🏃‍♂️ How to Run
-Step 1: Upload Arduino Code
+yaml
+Copy code
 
-Open the .ino file in Arduino IDE
+---
 
-Select board & COM port
+## 🏃‍♂️ How to Run
 
-Upload
+### 1️⃣ Upload Arduino Code
+- Open `gesture_robot.ino` in Arduino IDE
+- Select board and COM port
+- Upload
 
-Step 2: Run Gesture Detection
+### 2️⃣ Run Gesture Detection
+```bash
 python cnn_gesture_control.py
+3️⃣ Control the Robot
+Show hand gestures to the camera → Robot moves accordingly via Bluetooth.
 
-Step 3: Control the Robot
+Press A to switch to Autonomous Mode
 
-Perform hand gestures in front of the camera → robot responds via Bluetooth.
+Press M to switch back to Manual Mode
 
-Press A on your keyboard to switch to Auto mode.
-Press M to go back to Manual mode.
+🚀 Future Enhancements
+Add more gestures (diagonal movement, speed boost)
 
-🧪 Future Enhancements
+Improve CNN accuracy
 
-🚧 Add more gestures (e.g., speed boost, diagonal motion)
-🟦 Train a more accurate CNN model
-🤖 Add line-following or voice commands
-📍 Add PID-based smooth motion
+Add voice control or line-following
+
+Add PID for smoother motion
 
 📝 License
-
 This project is open-source under the MIT License.
-Feel free to use, modify, or improve the project with attribution.
+
+yaml
+Copy code
