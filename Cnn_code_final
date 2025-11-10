@@ -1,7 +1,3 @@
-# -------------------------------
-# GESTURE CONTROLLED ROBOT CNN
-# -------------------------------
-
 import os
 import cv2
 import numpy as np
@@ -12,26 +8,29 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropou
 import serial
 import time
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
-dataset_dir = "gesture_dataset"   # Folder to store images
-gestures = ["LEFT", "RIGHT", "FORWARD", "BACKWARD", "STOP", "START"]
-num_samples = 200                 # Images per gesture
-img_size = 64                     # Image resolution for CNN
+# -----------------------------
+# 1. CONFIGURATION
+# -----------------------------
+dataset_dir = "gesture_dataset"       # Folder to store images
+gestures = ["LEFT", "RIGHT", "FORWARD", "BACKWARD", "STOP"]
+num_samples = 200                     # Images per gesture
+img_size = 64                         # Image size for CNN
 
-# Bluetooth COM port
-bluetooth_port = "COM3"           # Change according to your system
+bluetooth_port = "COM3"               # Change according to your system
 baud_rate = 9600
 
-# -------------------------------
-# STEP 1: CREATE DATASET
-# -------------------------------
+# -----------------------------
+# 2. CREATE FOLDERS FOR DATASET
+# -----------------------------
 os.makedirs(dataset_dir, exist_ok=True)
 for gesture in gestures:
     os.makedirs(os.path.join(dataset_dir, gesture), exist_ok=True)
 
+# -----------------------------
+# 3. CAPTURE CUSTOM GESTURES
+# -----------------------------
 cap = cv2.VideoCapture(0)
+
 for gesture in gestures:
     print(f"Collect images for gesture: {gesture}")
     count = 0
@@ -40,26 +39,25 @@ for gesture in gestures:
         if not ret:
             continue
 
-        # Define region of interest
-        roi = frame[100:300, 100:300]
+        roi = frame[100:300, 100:300]  # Region of interest (hand area)
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         cv2.imshow("Capture Gesture", frame)
 
-        # Press 'c' to capture image
         key = cv2.waitKey(1)
-        if key == ord('c'):
+        if key == ord('c'):  # Press 'c' to capture
             img_path = os.path.join(dataset_dir, gesture, f"{count}.png")
             cv2.imwrite(img_path, gray)
             count += 1
             print(f"Captured {count}/{num_samples}")
         elif key == ord('q'):
             break
+
 cap.release()
 cv2.destroyAllWindows()
 
-# -------------------------------
-# STEP 2: PREPARE DATA
-# -------------------------------
+# -----------------------------
+# 4. PREPARE DATA FOR CNN
+# -----------------------------
 X, y = [], []
 
 for idx, gesture in enumerate(gestures):
@@ -74,9 +72,9 @@ for idx, gesture in enumerate(gestures):
 X = np.array(X).reshape(-1, img_size, img_size, 1) / 255.0
 y = to_categorical(y, num_classes=len(gestures))
 
-# -------------------------------
-# STEP 3: BUILD CNN MODEL
-# -------------------------------
+# -----------------------------
+# 5. BUILD CNN MODEL
+# -----------------------------
 model = Sequential([
     Conv2D(32, (3,3), activation='relu', input_shape=(img_size,img_size,1)),
     BatchNormalization(),
@@ -99,29 +97,26 @@ model = Sequential([
 model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 model.summary()
 
-# Train model
+# -----------------------------
+# 6. TRAIN MODEL
+# -----------------------------
 model.fit(X, y, epochs=20, batch_size=32, validation_split=0.2)
-
-# Save trained model
 model.save("gesture_custom.h5")
 
-# -------------------------------
-# STEP 4: REAL-TIME PREDICTION WITH BLUETOOTH
-# -------------------------------
-# Connect to Arduino Bluetooth
+# -----------------------------
+# 7. REAL-TIME PREDICTION + BLUETOOTH
+# -----------------------------
 arduino = serial.Serial(bluetooth_port, baud_rate)
-time.sleep(2)  # Wait for Arduino to initialize
+time.sleep(2)
 
 command_map = {
     "LEFT": 'L',
     "RIGHT": 'R',
     "FORWARD": 'F',
     "BACKWARD": 'B',
-    "STOP": 'S',
-    "START": 'G'
+    "STOP": 'S'
 }
 
-# Load model
 model = tf.keras.models.load_model("gesture_custom.h5")
 cap = cv2.VideoCapture(0)
 
@@ -135,7 +130,6 @@ while True:
     resized = cv2.resize(gray, (img_size, img_size))
     reshaped = resized.reshape(1, img_size, img_size, 1) / 255.0
 
-    # Predict gesture
     preds = model.predict(reshaped)
     class_id = np.argmax(preds)
     gesture = gestures[class_id]
@@ -143,7 +137,7 @@ while True:
     # Send command to Arduino
     arduino.write(command_map[gesture].encode())
 
-    # Display the detected gesture
+    # Display detected gesture
     cv2.putText(frame, f"Gesture: {gesture}", (50, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
     cv2.imshow("Gesture Control", frame)
