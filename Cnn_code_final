@@ -1,150 +1,375 @@
-import os
 import cv2
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.utils import to_categorical
+import os
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
-import serial
-import time
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from tensorflow.keras.utils import to_categorical
+from sklearn.model_selection import train_test_split
 
-# -----------------------------
-# 1. CONFIGURATION
-# -----------------------------
-dataset_dir = "gesture_dataset"       # Folder to store images
-gestures = ["LEFT", "RIGHT", "FORWARD", "BACKWARD", "STOP"]
-num_samples = 200                     # Images per gesture
-img_size = 64                         # Image size for CNN
+IMG_SIZE = 64          # 64x64 images for CNN
+DATASET_PATH = "hand_gesture_dataset"  # Path to your dataset
+CLASSES = ['0', '1', '2', '4', '5']   # 0=Stop, 1=Left, 2=Right, 4=Backward, 5=Forward
 
-bluetooth_port = "COM3"               # Change according to your system
-baud_rate = 9600
+import cv2
+import os
 
-# -----------------------------
-# 2. CREATE FOLDERS FOR DATASET
-# -----------------------------
-os.makedirs(dataset_dir, exist_ok=True)
-for gesture in gestures:
-    os.makedirs(os.path.join(dataset_dir, gesture), exist_ok=True)
+# Parameters
+DATASET_PATH = "hand_gesture_dataset"
+GESTURES = {
+    '0': "Stop",
+    '1': "Turn_Left",
+    '2': "Turn_Right",
+    '4': "Move_Backward",
+    '5': "Move_Forward"
+}
+IMG_SIZE = 64  # Resize images to 64x64
 
-# -----------------------------
-# 3. CAPTURE CUSTOM GESTURES
-# -----------------------------
+# Create folders for each gesture if not exist
+for gesture in GESTURES:
+    folder_path = os.path.join(DATASET_PATH, gesture)
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+# Start webcam
 cap = cv2.VideoCapture(0)
+print("Press the corresponding number key to capture the gesture:")
+for k, v in GESTURES.items():
+    print(f"{k}: {v}")
+print("Press 'q' to quit")
 
-for gesture in gestures:
-    print(f"Collect images for gesture: {gesture}")
-    count = 0
-    while count < num_samples:
-        ret, frame = cap.read()
-        if not ret:
-            continue
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-        roi = frame[100:300, 100:300]  # Region of interest (hand area)
-        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        cv2.imshow("Capture Gesture", frame)
+    # Flip frame for mirror view
+    frame = cv2.flip(frame, 1)
+    cv2.putText(frame, "Press 0,1,2,4,5 to capture gesture", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
 
-        key = cv2.waitKey(1)
-        if key == ord('c'):  # Press 'c' to capture
-            img_path = os.path.join(dataset_dir, gesture, f"{count}.png")
-            cv2.imwrite(img_path, gray)
-            count += 1
-            print(f"Captured {count}/{num_samples}")
-        elif key == ord('q'):
-            break
+    cv2.imshow("Capture Gesture Dataset", frame)
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord('q'):
+        break
+    elif chr(key) in GESTURES.keys():
+        gesture_label = chr(key)
+        folder_path = os.path.join(DATASET_PATH, gesture_label)
+        # Count existing images to avoid overwrite
+        img_count = len(os.listdir(folder_path))
+        img_name = f"{img_count+1}.png"
+
+        # Crop hand region (optional) or save full frame
+        hand_img = cv2.resize(frame, (IMG_SIZE, IMG_SIZE))
+        cv2.imwrite(os.path.join(folder_path, img_name), hand_img)
+        print(f"Saved image {img_name} for gesture {GESTURES[gesture_label]}")
 
 cap.release()
 cv2.destroyAllWindows()
 
-# -----------------------------
-# 4. PREPARE DATA FOR CNN
-# -----------------------------
-X, y = [], []
+import os
+import cv2
+import numpy as np
+from sklearn.model_selection import train_test_split
 
-for idx, gesture in enumerate(gestures):
-    gesture_dir = os.path.join(dataset_dir, gesture)
-    for img_file in os.listdir(gesture_dir):
-        img_path = os.path.join(gesture_dir, img_file)
+# Path to your dataset
+DATASET_PATH = DATASET_PATH = r"C:\s5\Openlab\hand_gesture_dataset"
+
+
+# Image size for CNN
+IMG_SIZE = 64
+
+# Classes / Gestures
+CLASSES = ["0", "1", "2", "3", "4"]
+NUM_CLASSES = len(CLASSES)
+
+import os
+import cv2
+import numpy as np
+
+DATASET_PATH = r"C:\Users\Sreya Lekshmi\Openlab\hand_gesture_dataset"
+CLASSES = ["0", "1", "2", "4", "5"]  # Include all gestures
+IMG_SIZE = 64
+
+images = []
+labels = []
+
+for label in CLASSES:
+    folder_path = os.path.join(DATASET_PATH, label)
+    if not os.path.exists(folder_path):
+        print(f"Folder {folder_path} not found, skipping...")
+        continue
+    
+    for file_name in os.listdir(folder_path):
+        # Skip hidden files/folders like .ipynb_checkpoints
+        if file_name.startswith("."):
+            continue
+        
+        img_path = os.path.join(folder_path, file_name)
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        img = cv2.resize(img, (img_size, img_size))
-        X.append(img)
-        y.append(idx)
+        if img is None:
+            print(f"Could not read {img_path}, skipping...")
+            continue
+        img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+        images.append(img)
+        labels.append(int(label))
 
-X = np.array(X).reshape(-1, img_size, img_size, 1) / 255.0
-y = to_categorical(y, num_classes=len(gestures))
+images = np.array(images) / 255.0  # Normalize
+labels = np.array(labels)
 
-# -----------------------------
-# 5. BUILD CNN MODEL
-# -----------------------------
-model = Sequential([
-    Conv2D(32, (3,3), activation='relu', input_shape=(img_size,img_size,1)),
-    BatchNormalization(),
-    MaxPooling2D(2,2),
+print("Dataset loaded successfully!")
+print("Total images:", len(images))
+print("Total labels:", len(labels))
 
-    Conv2D(64, (3,3), activation='relu'),
-    BatchNormalization(),
-    MaxPooling2D(2,2),
+import numpy as np
+import cv2
+import os
 
-    Conv2D(128, (3,3), activation='relu'),
-    BatchNormalization(),
-    MaxPooling2D(2,2),
+# Set image size
+IMG_SIZE = 64
 
-    Flatten(),
-    Dense(128, activation='relu'),
-    Dropout(0.5),
-    Dense(len(gestures), activation='softmax')
-])
+# Define class folders
+DATASET_PATH = r"C:\Users\Sreya Lekshmi\Openlab\hand_gesture_dataset"
+CLASSES = sorted([f for f in os.listdir(DATASET_PATH) if os.path.isdir(os.path.join(DATASET_PATH, f))])
 
+images = []
+labels = []
+
+for label in CLASSES:
+    folder_path = os.path.join(DATASET_PATH, label)
+    for file in os.listdir(folder_path):
+        img_path = os.path.join(folder_path, file)
+        # Read image
+        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # Convert to grayscale
+        if img is not None:
+            img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+            img = img / 255.0  # Normalize
+            images.append(img)
+            labels.append(int(label))  # Convert folder name to integer label
+
+# Convert to numpy arrays
+images = np.array(images).reshape(-1, IMG_SIZE, IMG_SIZE, 1)
+labels = np.array(labels)
+
+print("Images shape:", images.shape)
+print("Labels shape:", labels.shape)
+
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.utils import to_categorical
+import numpy as np
+
+# Suppose CLASSES contains your gesture labels as in your dataset
+# Example: CLASSES = [0, 1, 2, 4, 5]
+CLASSES = [0, 1, 2, 4, 5]
+
+# Map labels to continuous range 0..num_classes-1
+label_mapping = {label: idx for idx, label in enumerate(CLASSES)}
+labels_mapped = np.array([label_mapping[l] for l in labels])
+
+# One-hot encode labels
+num_classes = len(CLASSES)
+labels_encoded = to_categorical(labels_mapped, num_classes=num_classes)
+
+# Split dataset
+X_train, X_val, y_train, y_val = train_test_split(
+    images, labels_encoded, test_size=0.2, random_state=42, stratify=labels_mapped
+)
+
+print("Training set:", X_train.shape, y_train.shape)
+print("Validation set:", X_val.shape, y_val.shape)
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+
+# Define CNN model
+model = Sequential()
+
+# 1st Convolutional layer
+model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(64, 64, 1)))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+
+# 2nd Convolutional layer
+model.add(Conv2D(64, (3, 3), activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+
+# Flatten and Fully Connected layers
+model.add(Flatten())
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.5))  # helps prevent overfitting
+
+# Output layer
+model.add(Dense(len(CLASSES), activation='softmax'))
+
+# Compile the model
 model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Summary of the model
 model.summary()
 
-# -----------------------------
-# 6. TRAIN MODEL
-# -----------------------------
-model.fit(X, y, epochs=20, batch_size=32, validation_split=0.2)
-model.save("gesture_custom.h5")
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# -----------------------------
-# 7. REAL-TIME PREDICTION + BLUETOOTH
-# -----------------------------
-arduino = serial.Serial(bluetooth_port, baud_rate)
-time.sleep(2)
+# Data augmentation
+datagen = ImageDataGenerator(
+    rotation_range=15,     # rotate images
+    width_shift_range=0.1, # horizontal shift
+    height_shift_range=0.1,# vertical shift
+    zoom_range=0.1,        # zoom in/out
+    horizontal_flip=True   # flip images horizontally
+)
 
-command_map = {
-    "LEFT": 'L',
-    "RIGHT": 'R',
-    "FORWARD": 'F',
-    "BACKWARD": 'B',
-    "STOP": 'S'
-}
+# Fit the generator to training data
+datagen.fit(X_train)
 
-model = tf.keras.models.load_model("gesture_custom.h5")
+# Train the model
+history = model.fit(
+    datagen.flow(X_train, y_train, batch_size=32),
+    epochs=25,
+    validation_data=(X_val, y_val)
+)
+
+
+import matplotlib.pyplot as plt
+
+# Plot training & validation accuracy
+plt.figure(figsize=(12,5))
+plt.subplot(1,2,1)
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Model Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+
+# Plot training & validation loss
+plt.subplot(1,2,2)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Model Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+
+plt.show()
+
+# Save the trained model
+model.save("hand_gesture_cnn.keras")
+print("Model saved successfully!")
+import cv2
+import numpy as np
+from tensorflow.keras.models import load_model
+
+# Load your trained CNN model
+model = load_model("hand_gesture_cnn.keras")
+print("Model loaded successfully!")
+
+# Define gesture classes (same order as your training)
+CLASSES = ['0', '1', '2', '4', '5']  # 0: Stop, 1: Turn Left, 2: Turn Right, 4: Move Backward, 5: Move Forward
+
+# Start webcam
 cap = cv2.VideoCapture(0)
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        continue
+        break
 
-    roi = frame[100:300, 100:300]
+    # Flip the frame for mirror view
+    frame = cv2.flip(frame, 1)
+
+    # Crop or select ROI (optional, depends on your setup)
+    roi = frame[100:400, 100:400]  # Example: square in center of frame
+
+    # Preprocess the ROI for CNN
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (img_size, img_size))
-    reshaped = resized.reshape(1, img_size, img_size, 1) / 255.0
+    gray = cv2.resize(gray, (64, 64))  # CNN input size
+    gray = gray.astype('float32') / 255.0  # normalize
+    gray = np.expand_dims(gray, axis=-1)  # add channel dimension
+    gray = np.expand_dims(gray, axis=0)   # add batch dimension
 
-    preds = model.predict(reshaped)
-    class_id = np.argmax(preds)
-    gesture = gestures[class_id]
+    # Predict gesture
+    pred = model.predict(gray)
+    class_id = np.argmax(pred[0])
+    gesture = CLASSES[class_id]
 
-    # Send command to Arduino
-    arduino.write(command_map[gesture].encode())
+    # Map gestures to commands
+    command_map = {
+        '0': "Stop",
+        '1': "Turn Left",
+        '2': "Turn Right",
+        '4': "Move Backward",
+        '5': "Move Forward"
+    }
+    command = command_map.get(gesture, "Unknown")
 
-    # Display detected gesture
-    cv2.putText(frame, f"Gesture: {gesture}", (50, 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-    cv2.imshow("Gesture Control", frame)
+    # Display the ROI and prediction
+    cv2.rectangle(frame, (100, 100), (400, 400), (0, 255, 0), 2)
+    cv2.putText(frame, f"Gesture: {gesture} -> {command}", (50, 50),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    cv2.imshow("Hand Gesture Recognition", frame)
+
+    # Press ESC to exit
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+import cv2
+import time
+import numpy as np
+from tensorflow.keras.models import load_model
+
+model = load_model("hand_gesture_cnn.keras")
+IMG_SIZE = 64
+CLASSES = ['0','1','2','4','5']
+
+cap = cv2.VideoCapture(0)
+response_times = []
+
+# Define fixed ROI (x, y, width, height)
+roi_x, roi_y, roi_w, roi_h = 100, 100, 200, 200
+
+print("Press 'q' to quit...")
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Draw rectangle for ROI
+    cv2.rectangle(frame, (roi_x, roi_y), (roi_x+roi_w, roi_y+roi_h), (255,0,0), 2)
+    
+    # Crop ROI
+    hand_img = frame[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
+    gray = cv2.cvtColor(hand_img, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(gray, (IMG_SIZE, IMG_SIZE))
+    normalized = resized.astype('float32') / 255.0
+    input_img = np.expand_dims(normalized, axis=-1)  # channel
+    input_img = np.expand_dims(input_img, axis=0)    # batch
+
+    # Prediction
+    start = time.time()
+    prediction = model.predict(input_img, verbose=0)
+    end = time.time()
+    response_time = end - start
+    response_times.append(response_time)
+    
+    predicted_class = CLASSES[np.argmax(prediction)]
+
+    cv2.putText(frame, f"Gesture: {predicted_class}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+    cv2.putText(frame, f"Response Time: {response_time:.3f}s", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+
+    cv2.imshow("Gesture Recognition", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 cap.release()
 cv2.destroyAllWindows()
-arduino.close()
+
+# Average response time
+if response_times:
+    avg_time = sum(response_times) / len(response_times)
+    print(f"Average Response Time: {avg_time:.3f} seconds")
+
